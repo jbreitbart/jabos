@@ -29,77 +29,66 @@ struct work_tree_node {
 	~work_tree_node() {}
 
 	void scatter(int key, int hyperthreads) {
-		work_tree_node *current = this;
-		while (current->_children != nullptr) {
-			// check if current has already an entry for our key
-			if (current->_processes.count(key) == 0) {
-				current->_processes.insert(std::pair<int, int>(key, 0));
-			}
+		if (!_cap.enough(hyperthreads)) throw "kein platz mehr :)";
 
-			// find child with minimum number of processes with our key
-			int min_v = std::numeric_limits<int>::max();
-			int min_id = -1;
-			for (int i = 0; i < current->_number_of_children; ++i) {
-				int count = current->_children[i]._processes.count(key);
-				if (current->_children[i]._cap.enough(hyperthreads)) {
-					if (count < min_v) {
-						min_v = count;
-						min_id = i;
-					}
+		// find child with minimum number of processes with our key
+		int min_v = std::numeric_limits<int>::max();
+		int min_id = -1;
+		for (int i = 0; i < _number_of_children; ++i) {
+			int count = _children[i]._processes.count(key);
+			if (_children[i]._cap.enough(hyperthreads)) {
+				if (count < min_v) {
+					min_v = count;
+					min_id = i;
 				}
 			}
-			if (min_id == -1) {
-				// use the complete node
-				break;
-			}
-
-			current = &(current->_children[min_id]);
 		}
 
-		// ok, current now points to a children
-		std::cout << "allocating key " << key << " on " << current->_id << "@" << _level << std::endl;
-		current->reserve(key, hyperthreads);
+		// true if there are no children of if the capacity of the children is not big enough
+		if (min_id == -1) {
+			std::cout << "allocating key " << key << " on " << _id << "@" << _level << std::endl;
+			reserve(key, hyperthreads);
+			return;
+		}
+
+		_children[min_id].scatter(key, hyperthreads);
 	}
 
 	void compact(int key, int hyperthreads) {
 		if (!_cap.enough(hyperthreads)) throw "kein platz mehr :)";
-		work_tree_node *current = this;
-		while (current->_children != nullptr) {
-			// check if current has already an entry for our key
-			if (current->_processes.count(key) == 0) {
-				current->_processes.insert(std::pair<int, int>(key, 0));
-			}
 
-			// find child with minimum number of processes with our key
-			int min_v = -1;
-			int min_id = -1;
-			for (int i = 0; i < current->_number_of_children; ++i) {
-				int count = current->_children[i]._processes.count(key);
-				// std::cout << "checking " << current->_children[i]._id << "@" << current->_children[i]._level << ": "
-				//		  << count << " - " << current->_children[i]._cap  << " - " << hyperthreads << std::endl;
-				if (current->_children[i]._cap.enough(hyperthreads)) {
-					if (count > min_v) {
-						min_v = count;
-						min_id = i;
-					}
+		// find child with maximum number of processes with our key
+		int min_v = -1;
+		int min_id = -1;
+		for (int i = 0; i < _number_of_children; ++i) {
+			int count = _children[i]._processes.count(key);
+			// std::cout << "checking " << _children[i]._id << "@" << _children[i]._level << ": "
+			//		  << count << " - " << _children[i]._cap  << " - " << hyperthreads << std::endl;
+			if (_children[i]._cap.enough(hyperthreads)) {
+				if (count > min_v) {
+					min_v = count;
+					min_id = i;
 				}
 			}
-			if (min_id == -1) {
-				// use the complete node
-				break;
-			}
-
-			current = &(current->_children[min_id]);
 		}
 
-		// ok, current now points to a children
-		std::cout << "allocating key " << key << " on " << current->_id << "@" << _level << std::endl;
-		current->reserve(key, hyperthreads);
+		// true if there are no children of if the capacity of the children is not big enough
+		if (min_id == -1) {
+			std::cout << "allocating key " << key << " on " << _id << "@" << _level << std::endl;
+			reserve(key, hyperthreads);
+			return;
+		}
+
+		_children[min_id].compact(key, hyperthreads);
 	}
 
 	void reserve(int key, int hyperthreads) {
 		auto temp = _processes.find(key);
-		temp->second += hyperthreads;
+		if (temp == _processes.end()) {
+			_processes.insert(std::pair<int, int>(key, hyperthreads));
+		} else {
+			temp->second += hyperthreads;
+		}
 		_cap -= hyperthreads;
 		// std::cout << "decreased cap on " << _id << "@" << _level << " by " << hyperthreads << " to " << _cap
 		//		  << std::endl;
@@ -108,7 +97,10 @@ struct work_tree_node {
 	}
 
 	void remove_all(int key) {
-		if (_processes.count(key) == 0) return;
+		if (_processes.count(key) == 0) {
+			// std::cout << "nothing at " << _id << "@" << _level << " - " << _cap << std::endl;
+			return;
+		}
 
 		for (int i = 0; i < _number_of_children; ++i) _children[i].remove_all(key);
 
