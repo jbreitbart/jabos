@@ -4,7 +4,11 @@
 // TODO extern C for c++
 
 // TODO change for valgrind
-typedef void jCC;
+struct temp {
+	unsigned int cost[4];
+};
+
+typedef struct temp jCC;
 #define MALLOC malloc
 #define REALLOC realloc
 #define FREE free
