@@ -101,7 +101,7 @@ struct cor_node *process_call(struct cor_node *node, jCC *jcc) {
 }
 
 struct cor_node *process_return(struct cor_node *node, jCC *jcc) {
-	// returning bevore our tree root
+	// returning before our tree root
 	if (node->_caller == 0) {
 		node->_caller = MALLOC(sizeof(struct cor_node));
 		assert(node->_caller != 0);
