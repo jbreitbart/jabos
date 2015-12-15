@@ -40,6 +40,7 @@ static inline void remove_cor_node(struct cor_node *node, struct cor_node *activ
 	assert(id != p->_callees_size);
 	p->_callees[id] = p->_callees[p->_callees_size - 1];
 	p->_callees[p->_callees_size - 1] = 0;
+	--(p->_callees_size);
 
 	FREE(node);
 
